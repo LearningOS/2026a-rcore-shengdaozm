@@ -1,7 +1,9 @@
 .altmacro
+# sd->store doubleword 把x<n>保存到sp+n*8的地方
 .macro SAVE_GP n
     sd x\n, \n*8(sp)
 .endm
+# ld->load doubleword 把sp+n*8的地方的值加载到x<n>
 .macro LOAD_GP n
     ld x\n, \n*8(sp)
 .endm
@@ -9,6 +11,9 @@
     .globl __alltraps
     .globl __restore
     .align 2
+
+# 用户态发生中断的时候，硬件自动跳转到stvec指向的地址，即__alltraps
+# sscratch 在内核初始化时预先保存内核栈顶地址
 __alltraps:
     csrrw sp, sscratch, sp
     # now sp->kernel stack, sscratch->user stack
