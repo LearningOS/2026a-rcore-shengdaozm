@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "courseId": 2073,
+  "repository": "LearningOS/2026a-rcore-shengdaozm",
+  "user": "shengdaozm",
+  "totalScore": 500,
+  "chapters": {
+    "ch3": {
+      "points": "7/7",
+      "score": 100,
+      "commit": "8643ca924e767f9516de0cd249ae6db17b867c9d"
+    }
+  },
+  "score": 100,
+  "upload": {
+    "status": "pending",
+    "runId": "39443593172",
+    "runAttempt": "1"
+  }
+}
