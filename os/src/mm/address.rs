@@ -68,6 +68,9 @@ impl From<usize> for VirtPageNum {
         Self(v & ((1 << VPN_WIDTH_SV39) - 1))
     }
 }
+
+// 元组结构体
+
 impl From<PhysAddr> for usize {
     fn from(v: PhysAddr) -> Self {
         v.0
@@ -78,6 +81,8 @@ impl From<PhysPageNum> for usize {
         v.0
     }
 }
+
+// 补充39位地址到64位
 impl From<VirtAddr> for usize {
     fn from(v: VirtAddr) -> Self {
         if v.0 >= (1 << (VA_WIDTH_SV39 - 1)) {

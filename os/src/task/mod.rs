@@ -133,6 +133,20 @@ impl TaskManager {
         inner.tasks[cur].change_program_brk(size)
     }
 
+    /// mmap for the current 'Running' task. Returns true on success.
+    pub fn mmap_current(&self, start: usize, len: usize, prot: usize) -> bool {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].memory_set.mmap(start, len, prot)
+    }
+
+    /// munmap for the current 'Running' task. Returns true on success.
+    pub fn munmap_current(&self, start: usize, len: usize) -> bool {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].memory_set.munmap(start, len)
+    }
+
     /// Switch current `Running` task to the task we have found,
     /// or there is no `Ready` task and we can exit with all applications completed
     fn run_next_task(&self) {
@@ -152,6 +166,16 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+    fn record_syscall(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].record_syscall(syscall_id);
+    }
+    fn syscall_count(&self, syscall_id: usize) -> u32 {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_count(syscall_id)
     }
 }
 
@@ -201,4 +225,24 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// mmap for the current 'Running' task.
+pub fn mmap_current(start: usize, len: usize, prot: usize) -> bool {
+    TASK_MANAGER.mmap_current(start, len, prot)
+}
+
+/// munmap for the current 'Running' task.
+pub fn munmap_current(start: usize, len: usize) -> bool {
+    TASK_MANAGER.munmap_current(start, len)
+}
+
+/// Record one syscall invocation for the current task (used by sys_trace request 2).
+pub fn record_syscall(syscall_id: usize) {
+    TASK_MANAGER.record_syscall(syscall_id);
+}
+
+/// Number of times the current task invoked syscall `syscall_id`.
+pub fn syscall_count(syscall_id: usize) -> u32 {
+    TASK_MANAGER.syscall_count(syscall_id)
 }
