@@ -271,6 +271,100 @@ impl MemorySet {
         self.areas.clear();
     }
 
+    /// mmap 将[start,start+len)映射分配新的物理页
+    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> bool {
+        // prot其余位必须为0，RWX至少有一位是1，start必须按页4kb对齐
+        if (port & !0x7) != 0 || (port & 0x7) == 0 || start % PAGE_SIZE != 0 {
+            return false;
+        }
+        if len == 0 {
+            return true;
+        }
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        // 区间不能存在已经被映射的页
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            if let Some(pte) = self.page_table.translate(vpn) {
+                if pte.is_valid() {
+                    return false;
+                }
+            }
+        }
+        // 映射分配新的物理页
+        let mut frames: Vec<FrameTracker> = Vec::new();
+        for _ in 0..(end_vpn.0 - start_vpn.0) {
+            match frame_alloc() {
+                Some(f) => frames.push(f),
+                None => return false,
+            }
+        }
+        // 权限分配
+        let mut perm = MapPermission::U;
+        if (port & 0x1) != 0 {
+            perm |= MapPermission::R;
+        }
+        if (port & 0x2) != 0 {
+            perm |= MapPermission::W;
+        }
+        if (port & 0x4) != 0 {
+            perm |= MapPermission::X;
+        }
+        let pte_flags = PTEFlags::from_bits(perm.bits).unwrap();
+        let mut area = MapArea::new(start_va, end_va, MapType::Framed, perm);
+        let vpns: Vec<VirtPageNum> = VPNRange::new(start_vpn, end_vpn).into_iter().collect();
+        for (vpn, frame) in vpns.into_iter().zip(frames.into_iter()) {
+            let ppn = frame.ppn;
+            area.data_frames.insert(vpn, frame);
+            self.page_table.map(vpn, ppn, pte_flags);
+        }
+        self.areas.push(area);
+        unsafe {
+            asm!("sfence.vma");
+        }
+        true
+    }
+
+    /// munmap ：取消[start,start+len)的映射并释放物理页
+    pub fn munmap(&mut self, start: usize, len: usize) -> bool {
+        if start % PAGE_SIZE != 0 {
+            return false;
+        }
+        if len == 0 {
+            return true;
+        }
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        // 区间内必须全部映射
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            match self.page_table.translate(vpn) {
+                Some(pte) => {
+                    if !pte.is_valid() {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+        }
+        let vpns: Vec<VirtPageNum> = VPNRange::new(start_vpn, end_vpn).into_iter().collect();
+        for vpn in vpns.iter() {
+            self.page_table.unmap(*vpn);
+        }
+        // 释放被取消映射的物理页（从各 area 中移除对应的 FrameTracker）
+        for area in self.areas.iter_mut() {
+            for vpn in vpns.iter() {
+                area.data_frames.remove(vpn);
+            }
+        }
+        unsafe {
+            asm!("sfence.vma");
+        }
+        true
+    }
+
     /// shrink the area to new_end
     #[allow(unused)]
     pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {

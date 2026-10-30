@@ -115,3 +115,17 @@ lazy_static! {
 pub fn add_initproc() {
     add_task(INITPROC.clone());
 }
+
+/// mmap for the current 'Running' task. Returns true on success.
+pub fn mmap_current(start: usize, len: usize, prot: usize) -> bool {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.memory_set.mmap(start, len, prot)
+}
+
+/// munmap for the current 'Running' task. Returns true on success.
+pub fn munmap_current(start: usize, len: usize) -> bool {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.memory_set.munmap(start, len)
+}
